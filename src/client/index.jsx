@@ -6,7 +6,7 @@ import { en, LOCALE_NS, zh } from './locales.js'
 import { installLibraryNavIcon } from './nav-icon.js'
 import styles from './styles.css'
 
-export const inject = ['slots', 'locale', 'remote', 'remote.agentPresets', 'remote.settings']
+export const inject = ['slots', 'locale', 'remote', 'remote.agentPresets', 'remote.settings', 'remote.pluginInventory', 'remote.pluginManager']
 
 export function apply(ctx) {
   const previous = document.querySelector('style[data-plugin="dsh-preset-library"]')

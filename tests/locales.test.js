@@ -49,3 +49,15 @@ test('locale dictionaries expose the complete affiliation interface', () => {
   assert.deepEqual(placeholders(zh['affiliation.collapse']), ['count', 'name'])
   assert.deepEqual(placeholders(zh['affiliation.childCount']), ['count'])
 })
+
+test('rc.2 copy documents volatile default and removes preset file actions', () => {
+  for (const dictionary of [en, zh]) {
+    for (const key of ['status.default', 'bundle.title', 'bundle.description', 'bundle.empty', 'bundle.readOnly', 'bundle.toggleNamed', 'notice.bundleChanged', 'notice.bundleRestart', 'error.bundles', 'error.inventory']) {
+      assert.equal(typeof dictionary[key], 'string', `missing ${key}`)
+    }
+    for (const key of ['action.copy', 'action.openDirectory', 'action.delete', 'notice.copied', 'notice.deleted']) {
+      assert.equal(dictionary[key], undefined, `obsolete ${key}`)
+    }
+  }
+  assert.match(en['notice.default'], /volatile/i)
+})

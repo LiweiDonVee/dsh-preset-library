@@ -2,20 +2,18 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
 import {
   createEmptyDocument,
-  removePresetAssignment,
-  removePresetRelations,
   removeTag,
   setPresetParent,
 } from '../core/document.js'
 import { buildPresetFamilies, decorateRoster, groupLibrary, projectLibrary, tagCounts } from '../core/library.js'
 import {
   ClientApiError,
-  copyPreset,
-  deletePreset,
+  listBundles,
+  listPluginInventory,
   loadMetadata,
-  openPresetDirectory,
   readRoster,
   saveMetadata,
+  setBundleEnabled,
   setDefaultPreset,
 } from './api.js'
 import {
@@ -24,7 +22,6 @@ import {
   IconChevronDown,
   IconChevronRight,
   IconClose,
-  IconCopy,
   IconEdit,
   IconFolder,
   IconGrid,
@@ -33,14 +30,12 @@ import {
   IconPlus,
   IconRefresh,
   IconSearch,
-  IconTrash,
   IconWarning,
 } from './icons.jsx'
 
 const STATUS_FILTERS = [
   ['all', 'status.all'],
-  ['system', 'status.system'],
-  ['user', 'status.user'],
+  ['default', 'status.default'],
   ['broken', 'status.broken'],
   ['untagged', 'status.untagged'],
 ]
@@ -317,38 +312,6 @@ function AffiliationDialog({ t, row, roster, document, onClose, onSave, busy }) 
   )
 }
 
-function CopyDialog({ t, source, existingIds, onClose, onCopy, busy }) {
-  const [id, setId] = useState('')
-  const [name, setName] = useState('')
-  const validId = /^[a-z0-9][a-z0-9-]*$/.test(id) && !existingIds.has(id)
-
-  return (
-    <Modal
-      t={t}
-      title={t('copy.title', { name: displayName(source) })}
-      onClose={onClose}
-      footer={(
-        <>
-          <button type="button" className="pl-button secondary" onClick={onClose}>{t('cancel')}</button>
-          <button type="button" className="pl-button primary" disabled={!validId || busy} onClick={() => onCopy({ id, name })}>
-            {t(busy ? 'copy.copying' : 'copy.action')}
-          </button>
-        </>
-      )}
-    >
-      <label className="pl-field">
-        <span>Preset ID</span>
-        <input autoFocus value={id} onChange={(event) => setId(event.target.value.toLocaleLowerCase())} placeholder="my-preset" />
-      </label>
-      {id && !validId ? <p className="pl-field-error">{t('copy.idError')}</p> : null}
-      <label className="pl-field">
-        <span>{t('copy.displayName')}</span>
-        <input value={name} onChange={(event) => setName(event.target.value)} placeholder={t('copy.displayNamePlaceholder')} />
-      </label>
-    </Modal>
-  )
-}
-
 function ConfirmDialog({ t, title, body, confirmLabel, danger = false, onClose, onConfirm, busy }) {
   return (
     <Modal
@@ -372,16 +335,12 @@ function ConfirmDialog({ t, title, body, confirmLabel, danger = false, onClose, 
 function PresetActions({
   t,
   row,
-  roster,
   busy,
   readOnly,
   ownedParentIds,
   onEditTags,
   onAffiliation,
   onDefault,
-  onCopy,
-  onOpen,
-  onDelete,
 }) {
   const ownsChildren = ownedParentIds.has(row.id)
   const affiliationLabel = t(ownsChildren ? 'affiliation.blocked' : 'affiliation.action')
@@ -392,14 +351,37 @@ function PresetActions({
       <IconButton label={t(row.isDefault ? 'action.currentDefault' : 'action.setDefault')} disabled={busy || row.isDefault || row.broken !== undefined} onClick={() => onDefault(row)}>
         <IconCheck size={16} />
       </IconButton>
-      <IconButton label={t('action.copy')} disabled={busy || !roster.authorable || row.broken !== undefined} onClick={() => onCopy(row)}><IconCopy size={16} /></IconButton>
-      {row.trust === 'user' ? (
-        <IconButton label={t('action.openDirectory')} disabled={busy} onClick={() => onOpen(row)}><IconFolder size={16} /></IconButton>
-      ) : null}
-      {row.trust === 'user' ? (
-        <IconButton label={t('action.delete')} danger disabled={busy} onClick={() => onDelete(row)}><IconTrash size={16} /></IconButton>
-      ) : null}
     </div>
+  )
+}
+
+export function BundleSection({ t, bundles, inventory, busy, onToggle }) {
+  const managementAvailable = inventory?.managementAvailable === true
+  return (
+    <section className="pl-bundles" aria-label={t('bundle.title')}>
+      <h3>{t('bundle.title')}</h3>
+      <p>{t('bundle.description')}</p>
+      {bundles.length === 0 ? <p className="pl-muted">{t('bundle.empty')}</p> : (
+        <ul className="pl-bundle-list">
+          {bundles.map((bundle) => {
+            const readOnly = !managementAvailable || Boolean(bundle.readOnlyReason) || Boolean(bundle.error && !bundle.enabled)
+            return (
+              <li key={bundle.name} className="pl-bundle-row">
+                <div>
+                  <strong>{bundle.name}</strong>{bundle.version ? <span> {bundle.version}</span> : null}
+                  <p>{bundle.description || t('bundle.noDescription')}</p>
+                  <small>{t('bundle.rows', { count: bundle.rows.length })}{bundle.error ? ` · ${bundle.error.code}` : ''}</small>
+                </div>
+                <label title={readOnly ? t('bundle.readOnly') : t('bundle.toggle')}>
+                  <span className="pl-sr-only">{t('bundle.toggleNamed', { name: bundle.name })}</span>
+                  <input type="checkbox" checked={bundle.enabled} disabled={busy || readOnly} onChange={() => onToggle(bundle)} />
+                </label>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </section>
   )
 }
 
@@ -566,7 +548,9 @@ function GroupedView({ t, document, onToggleGroup, ...props }) {
 
 export function PresetLibrary({ api, t }) {
   const [documentState, setDocumentState] = useState(createEmptyDocument)
-  const [roster, setRoster] = useState({ presets: [], authorable: false, hasDocument: false })
+  const [roster, setRoster] = useState({ presets: [] })
+  const [bundles, setBundles] = useState([])
+  const [inventory, setInventory] = useState(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
@@ -581,9 +565,11 @@ export function PresetLibrary({ api, t }) {
   const reload = useCallback(async ({ preserve = false } = {}) => {
     setLoading(!preserve)
     setError(null)
-    const [rosterResult, metadataResult] = await Promise.allSettled([
+    const [rosterResult, metadataResult, bundleResult, inventoryResult] = await Promise.allSettled([
       readRoster(api),
       loadMetadata(),
+      listBundles(api),
+      listPluginInventory(api),
     ])
     if (rosterResult.status === 'fulfilled') setRoster(rosterResult.value)
     else setError(t('error.roster', { message: messageOf(rosterResult.reason) }))
@@ -599,6 +585,10 @@ export function PresetLibrary({ api, t }) {
         path: path ? ` (${path})` : '',
       }))
     }
+    if (bundleResult.status === 'fulfilled') setBundles(bundleResult.value)
+    else setError(t('error.bundles', { message: messageOf(bundleResult.reason) }))
+    if (inventoryResult.status === 'fulfilled') setInventory(inventoryResult.value)
+    else setError(t('error.inventory', { message: messageOf(inventoryResult.reason) }))
     setLoading(false)
   }, [api, t])
 
@@ -645,7 +635,6 @@ export function PresetLibrary({ api, t }) {
     sort: documentState.ui.sort,
   }), [roster.presets, documentState, query, selectedTagIds, statusFilter])
   const counts = useMemo(() => tagCounts(decorated, documentState), [decorated, documentState])
-  const existingIds = useMemo(() => new Set(roster.presets.map((preset) => preset.id)), [roster.presets])
   const ownedParentIds = useMemo(() => new Set(Object.values(documentState.parents)), [documentState.parents])
   const familyCollapsible = query.trim() === '' && selectedTagIds.length === 0 && statusFilter === 'all'
 
@@ -726,58 +715,15 @@ export function PresetLibrary({ api, t }) {
     }
   }
 
-  const handleCopy = async ({ id, name }) => {
+  const handleBundleToggle = async (bundle) => {
     setBusy(true)
     setError(null)
     try {
-      await copyPreset(api, { from: modal.row.id, id, name })
+      const result = await setBundleEnabled(api, bundle.name, !bundle.enabled)
+      setBundles(await listBundles(api))
+      setInventory(await listPluginInventory(api))
       setRoster(await readRoster(api))
-      setModal(null)
-      setNotice(t('notice.copied', { name: name.trim() || id }))
-    } catch (reason) {
-      setError(messageOf(reason))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const handleOpen = async (row) => {
-    setBusy(true)
-    setError(null)
-    try {
-      const result = await openPresetDirectory(api, row.id)
-      setNotice(result.opened
-        ? t('notice.opened', { name: displayName(row) })
-        : t('notice.path', { path: result.path }))
-    } catch (reason) {
-      setError(messageOf(reason))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const handleDelete = async (row) => {
-    setBusy(true)
-    setError(null)
-    try {
-      await deletePreset(api, row.id)
-      const hasRelations = documentState.assignments[row.id] !== undefined
-        || documentState.parents[row.id] !== undefined
-        || Object.values(documentState.parents).includes(row.id)
-      if (hasRelations && !readOnly) {
-        let next = removePresetAssignment(documentState, row.id)
-        next = removePresetRelations(next, row.id)
-        const saved = await saveMetadata(next, documentState.revision)
-        setDocumentState(saved)
-      }
-      setRoster(await readRoster(api))
-      setSelectedPresetIds((current) => {
-        const next = new Set(current)
-        next.delete(row.id)
-        return next
-      })
-      setModal(null)
-      setNotice(t('notice.deleted', { name: displayName(row) }))
+      setNotice(t(result.application === 'restart-required' ? 'notice.bundleRestart' : 'notice.bundleChanged', { name: bundle.name }))
     } catch (reason) {
       setError(messageOf(reason))
     } finally {
@@ -816,9 +762,6 @@ export function PresetLibrary({ api, t }) {
     onEditTags: (row) => setModal({ type: 'assign', mode: 'edit', presetIds: [row.id] }),
     onAffiliation: (row) => setModal({ type: 'affiliation', row }),
     onDefault: handleDefault,
-    onCopy: (row) => setModal({ type: 'copy', row }),
-    onOpen: handleOpen,
-    onDelete: (row) => setModal({ type: 'delete-preset', row }),
   }
 
   return (
@@ -882,7 +825,7 @@ export function PresetLibrary({ api, t }) {
           <div className="pl-status-list">
             {STATUS_FILTERS.map(([value, labelKey]) => {
               const count = value === 'all' ? decorated.length : decorated.filter((row) => {
-                if (value === 'system' || value === 'user') return row.trust === value
+                if (value === 'default') return row.isDefault === true
                 if (value === 'broken') return row.broken !== undefined
                 return row.tagIds.length === 0
               }).length
@@ -904,6 +847,8 @@ export function PresetLibrary({ api, t }) {
           {!loading && rows.length > 0 && documentState.ui.view === 'grouped' ? <GroupedView {...viewProps} document={documentState} onToggleGroup={toggleGroup} /> : null}
         </main>
       </div>
+
+      <BundleSection t={t} bundles={bundles} inventory={inventory} busy={busy} onToggle={handleBundleToggle} />
 
       {selectedPresetIds.size > 0 ? (
         <div className="pl-bulk-bar">
@@ -950,21 +895,6 @@ export function PresetLibrary({ api, t }) {
           busy={busy}
           onClose={() => setModal(null)}
           onSave={saveAffiliation}
-        />
-      ) : null}
-      {modal?.type === 'copy' ? (
-        <CopyDialog t={t} source={modal.row} existingIds={existingIds} busy={busy} onClose={() => setModal(null)} onCopy={handleCopy} />
-      ) : null}
-      {modal?.type === 'delete-preset' ? (
-        <ConfirmDialog
-          t={t}
-          title={t('confirm.presetTitle')}
-          body={t('confirm.presetBody', { name: displayName(modal.row) })}
-          confirmLabel={t('confirm.presetAction')}
-          danger
-          busy={busy}
-          onClose={() => setModal(null)}
-          onConfirm={() => handleDelete(modal.row)}
         />
       ) : null}
     </div>

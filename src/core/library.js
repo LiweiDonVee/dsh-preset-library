@@ -25,7 +25,7 @@ export function decorateRoster(presets, document) {
 
 function matchesStatus(row, status) {
   if (status === 'all') return true
-  if (status === 'system' || status === 'user') return row.trust === status
+  if (status === 'default') return row.isDefault === true
   if (status === 'broken') return row.broken !== undefined
   if (status === 'untagged') return row.tagIds.length === 0
   return true
@@ -47,7 +47,7 @@ function compareName(left, right) {
 function statusRank(row) {
   if (row.isDefault) return -1
   if (row.broken !== undefined) return 3
-  return row.trust === 'system' ? 0 : 1
+  return 0
 }
 
 function sorter(mode) {

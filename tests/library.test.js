@@ -11,11 +11,11 @@ import {
 } from '../src/core/library.js'
 
 const roster = [
-  { id: 'standard', trust: 'system', isDefault: true, name: 'Standard', description: 'General coding agent' },
-  { id: 'story-architect', trust: 'user', isDefault: false, name: 'Story Architect', description: 'Long-form narrative planning' },
-  { id: 'research-synth', trust: 'user', isDefault: false, name: 'Research Synth', description: 'Source synthesis and citations' },
-  { id: 'code-auditor', trust: 'user', isDefault: false, name: 'Code Auditor', description: 'Review code risks', broken: 'missing composition' },
-  { id: 'minimal', trust: 'system', isDefault: false, name: 'Minimal', description: 'Small tool surface' },
+  { id: 'standard', isDefault: true, name: 'Standard', description: 'General coding agent' },
+  { id: 'story-architect', isDefault: false, name: 'Story Architect', description: 'Long-form narrative planning' },
+  { id: 'research-synth', isDefault: false, name: 'Research Synth', description: 'Source synthesis and citations' },
+  { id: 'code-auditor', isDefault: false, name: 'Code Auditor', description: 'Review code risks', broken: 'missing composition' },
+  { id: 'minimal', isDefault: false, name: 'Minimal', description: 'Small tool surface' },
 ]
 
 function metadata() {
@@ -65,14 +65,22 @@ test('search matches name, id, description, and tag names case-insensitively', (
   assert.deepEqual(names('writing'), ['story-architect'])
 })
 
-test('status filters distinguish system, user, broken, and untagged rows', () => {
+test('status filters distinguish default, broken, and untagged rows', () => {
   const document = metadata()
   const ids = (status) => projectLibrary(roster, document, { ...baseFilters, status }).map((row) => row.id)
 
-  assert.deepEqual(ids('system'), ['minimal', 'standard'])
-  assert.deepEqual(ids('user'), ['code-auditor', 'research-synth', 'story-architect'])
+  assert.deepEqual(ids('default'), ['standard'])
   assert.deepEqual(ids('broken'), ['code-auditor'])
   assert.deepEqual(ids('untagged'), ['minimal', 'standard'])
+})
+
+test('default filter works with rc.2 roster rows that omit trust', () => {
+  const rows = [
+    { id: 'standard', isDefault: true },
+    { id: 'custom', isDefault: false },
+  ]
+  const ids = projectLibrary(rows, createEmptyDocument(), { ...baseFilters, status: 'default' }).map(row => row.id)
+  assert.deepEqual(ids, ['standard'])
 })
 
 test('any mode accepts rows with at least one selected tag', () => {
@@ -116,7 +124,7 @@ test('groupLibrary repeats multi-tag rows and includes an untagged group', () =>
 
 test('tagCounts reports counts for a projected row set', () => {
   const document = metadata()
-  const rows = decorateRoster(roster, document).filter((row) => row.trust === 'user')
+  const rows = decorateRoster(roster, document).filter((row) => !['standard', 'minimal'].includes(row.id))
 
   assert.deepEqual(tagCounts(rows, document), {
     'tag-writing-001': 1,
@@ -126,10 +134,10 @@ test('tagCounts reports counts for a projected row set', () => {
 })
 
 const familyRoster = [
-  { id: 'preset-a', trust: 'user', isDefault: false, name: 'Alpha Parent', description: 'Base preset' },
-  { id: 'variant-b', trust: 'user', isDefault: false, name: 'Beta Variant', description: 'First variant' },
-  { id: 'variant-c', trust: 'user', isDefault: false, name: 'Gamma Variant', description: 'Second variant' },
-  { id: 'preset-z', trust: 'user', isDefault: false, name: 'Zeta Root', description: 'Independent preset' },
+  { id: 'preset-a', isDefault: false, name: 'Alpha Parent', description: 'Base preset' },
+  { id: 'variant-b', isDefault: false, name: 'Beta Variant', description: 'First variant' },
+  { id: 'variant-c', isDefault: false, name: 'Gamma Variant', description: 'Second variant' },
+  { id: 'preset-z', isDefault: false, name: 'Zeta Root', description: 'Independent preset' },
 ]
 
 function familyMetadata() {

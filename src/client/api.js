@@ -60,18 +60,21 @@ export async function readRoster(api) {
 }
 
 export async function setDefaultPreset(api, id) {
-  return unwrapOfficial(await api.settings.update('agent-presets', { default: id }, undefined))
+  return unwrapOfficial(await api.settings.update('agent-preset-registry', { selectedDefault: id }, undefined))
 }
 
-export async function copyPreset(api, { from, id, name }) {
-  const trimmedName = String(name ?? '').trim()
-  return unwrapOfficial(await api.agentPresets.copy(from, id, trimmedName || undefined))
+export async function listBundles(api) {
+  return unwrapOfficial(await api.pluginManager.listBundles())
 }
 
-export async function openPresetDirectory(api, id) {
-  return unwrapOfficial(await api.settings.openAgentPresetDirectory(id))
+export async function listPluginInventory(api) {
+  return unwrapOfficial(await api.pluginInventory.list())
 }
 
-export async function deletePreset(api, id) {
-  return unwrapOfficial(await api.agentPresets.deletePreset(id))
+export async function setBundleEnabled(api, name, enabled) {
+  const result = unwrapOfficial(await api.pluginManager.setBundleEnabled(name, enabled))
+  if (result.application !== 'applied' && result.application !== 'restart-required') {
+    throw new ClientApiError(`Bundle ${name} was not applied (${result.error?.code ?? result.application}).`, 0, result)
+  }
+  return result
 }

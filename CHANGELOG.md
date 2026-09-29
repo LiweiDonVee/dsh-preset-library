@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Migrate the preset library to DSH 0.1.7-rc.2 Remote APIs and bundle management.
+
 ## 0.1.1 — 2026-09-07
 
 - First standalone public source release, prepared from the reviewed local plugin.

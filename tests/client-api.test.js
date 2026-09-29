@@ -4,12 +4,12 @@ import assert from 'node:assert/strict'
 import { createEmptyDocument } from '../src/core/document.js'
 import {
   ClientApiError,
-  copyPreset,
-  deletePreset,
+  listBundles,
+  listPluginInventory,
   loadMetadata,
-  openPresetDirectory,
   readRoster,
   saveMetadata,
+  setBundleEnabled,
   setDefaultPreset,
 } from '../src/client/api.js'
 
@@ -66,7 +66,7 @@ test('loadMetadata reports non-JSON transport errors clearly', async () => {
 })
 
 test('readRoster unwraps the Remote result without a transport envelope', async () => {
-  const value = { presets: [{ id: 'standard' }], authorable: true }
+  const value = { presets: [{ id: 'standard' }] }
   const api = { agentPresets: { list: async (...args) => {
     assert.deepEqual(args, [])
     return { ok: true, value }
@@ -78,47 +78,47 @@ test('readRoster unwraps the Remote result without a transport envelope', async 
 test('official preset failures become ClientApiError', async () => {
   const api = {
     settings: {
-      update: async () => ({ ok: false, error: { code: 'settings/read-only', message: 'not allowed', details: { ns: 'agent-presets' } } }),
+      update: async () => ({ ok: false, error: { code: 'settings/read-only', message: 'not allowed', details: { ns: 'agent-preset-registry' } } }),
     },
   }
 
   await assert.rejects(setDefaultPreset(api, 'standard'), error =>
     error instanceof ClientApiError && error.message === 'not allowed'
-    && error.details.code === 'settings/read-only' && error.details.details.ns === 'agent-presets')
+    && error.details.code === 'settings/read-only' && error.details.details.ns === 'agent-preset-registry')
 })
 
-test('copyPreset omits an empty display name', async () => {
-  let payload
-  const api = {
-    agentPresets: {
-      copy: async (...args) => {
-        payload = args
-        return { ok: true, value: undefined }
-      },
-    },
-  }
-
-  await copyPreset(api, { from: 'standard', id: 'my-standard', name: '   ' })
-  assert.deepEqual(payload, ['standard', 'my-standard', undefined])
-})
-
-test('preset mutations use the rc.1 Remote namespaces and positional arguments', async () => {
+test('default and bundle management use rc.2 Remote methods', async () => {
   const calls = []
-  const record = method => async (...args) => { calls.push([method, ...args]); return { ok: true, value: undefined } }
+  const record = (method, value) => async (...args) => { calls.push([method, ...args]); return { ok: true, value } }
+  const bundles = [{ name: 'preset-bundle', enabled: true, rows: [], overrides: [] }]
+  const inventory = { entries: [], agentPresets: [] }
   const api = {
-    settings: { update: record('update'), openAgentPresetDirectory: record('open') },
-    agentPresets: { copy: record('copy'), deletePreset: record('delete') },
+    settings: { update: record('update', {}) },
+    pluginManager: {
+      listBundles: record('listBundles', bundles),
+      setBundleEnabled: record('setBundleEnabled', { changed: true, application: 'applied', stage: 'enable', target: 'preset-bundle' }),
+    },
+    pluginInventory: { list: record('inventory', inventory) },
   }
   await setDefaultPreset(api, 'standard')
-  await copyPreset(api, { from: 'standard', id: 'my-standard', name: ' My Standard ' })
-  await openPresetDirectory(api, 'my-standard')
-  await deletePreset(api, 'my-standard')
+  assert.deepEqual(await listBundles(api), bundles)
+  assert.deepEqual(await listPluginInventory(api), inventory)
+  assert.equal((await setBundleEnabled(api, 'preset-bundle', false)).application, 'applied')
   assert.deepEqual(calls, [
-    ['update', 'agent-presets', { default: 'standard' }, undefined],
-    ['copy', 'standard', 'my-standard', 'My Standard'],
-    ['open', 'my-standard'],
-    ['delete', 'my-standard'],
+    ['update', 'agent-preset-registry', { selectedDefault: 'standard' }, undefined],
+    ['listBundles'],
+    ['inventory'],
+    ['setBundleEnabled', 'preset-bundle', false],
   ])
+})
+
+test('bundle lifecycle refuses non-applied results', async () => {
+  const api = { pluginManager: { setBundleEnabled: async () => ({
+    ok: true,
+    value: { changed: false, application: 'failed', stage: 'enable', target: 'broken', error: { code: 'operation-error' } },
+  }) } }
+  await assert.rejects(setBundleEnabled(api, 'broken', true), error =>
+    error instanceof ClientApiError && error.details.application === 'failed')
 })
 
 test('RemoteError rejection retains its original diagnostic', async () => {

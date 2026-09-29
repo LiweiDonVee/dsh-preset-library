@@ -32,7 +32,7 @@ async function loadClient() {
 
 function context() {
   const seats = new Map()
-  const remote = { agentPresets: {}, settings: {} }
+  const remote = { agentPresets: {}, settings: {}, pluginInventory: {}, pluginManager: {} }
   const t = key => key
   const ctx = {
     remote,
@@ -47,10 +47,12 @@ function context() {
   return { ctx, seats, t, remote }
 }
 
-test('settings section receives the rc.1 Remote service', async () => {
+test('settings section receives the rc.2 Remote namespaces', async () => {
   const client = await loadClient()
   assert.ok(client.inject.includes('remote.agentPresets'))
   assert.ok(client.inject.includes('remote.settings'))
+  assert.ok(client.inject.includes('remote.pluginInventory'))
+  assert.ok(client.inject.includes('remote.pluginManager'))
   const { ctx, seats, t, remote } = context()
   client.apply(ctx)
   const section = seats.get('settings.section')
