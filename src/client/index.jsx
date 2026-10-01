@@ -20,7 +20,7 @@ export function apply(ctx) {
   ctx.effect(() => ctx.locale.register(LOCALE_NS, { zh, en }), 'preset-library: dictionaries')
   const t = ctx.locale.bind(LOCALE_NS)
   ctx.effect(() => installLibraryNavIcon(document, () => t('nav'), IconLibrary), 'preset-library: nav icon')
-  const api = ctx.get('remote')
+  const api = ctx.remote
   ctx.effect(() => ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',
     id: 'preset-library',
