@@ -6,15 +6,15 @@ Features include compact grid/list/grouped views, bulk tags, status filters, and
 
 ## Install
 
-Requires **Node.js 24**, npm and a working **DSH 0.1.7-rc.2** Web profile.
+Requires **Node.js 24**, npm and a working **DSH 0.2.1-rc.5** Web profile.
 
 ```sh
 git clone https://github.com/LiweiDonVee/dsh-preset-library.git
 cd dsh-preset-library
 npm ci
 npm run check
-npx --yes @deepseek-ai/dsh@0.1.7-rc.2 plugin --profile web add .
-npx --yes @deepseek-ai/dsh@0.1.7-rc.2 web
+npx --yes @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add .
+npx --yes @deepseek-ai/dsh@0.2.1-rc.5 web
 ```
 
 Keep the clone in place if the package manager installs it as a local link. Restart the host after installation and use its printed login URL. Open **Settings → Preset Library**.
@@ -24,7 +24,7 @@ The metadata file is `$DSH_HOME/preset-library.json`, defaulting to `~/.dsh/pres
 Remove with:
 
 ```sh
-npx --yes @deepseek-ai/dsh@0.1.7-rc.2 plugin --profile web remove dsh-preset-library
+npx --yes @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web remove dsh-preset-library
 ```
 
 Restart DSH afterward. Uninstall does not erase tag metadata.

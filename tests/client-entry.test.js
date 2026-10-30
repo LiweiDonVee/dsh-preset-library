@@ -100,7 +100,7 @@ test('settings section receives the rc.2 Remote namespaces', async () => {
   assert.equal(rendered.props.t, t)
 })
 
-test('manifest selects the DSH 0.2.0-rc.2 web client assembly', async () => {
+test('manifest selects the DSH 0.2.1-rc.5 web client assembly', async () => {
   const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
   assert.deepEqual(packageJson.dsh.client, {
     platform: 'web',
@@ -110,7 +110,7 @@ test('manifest selects the DSH 0.2.0-rc.2 web client assembly', async () => {
       '@deepseek-ai/dsh-client-ui-settings',
     ],
   })
-  assert.match(await readFile(new URL('../README.md', import.meta.url), 'utf8'), /0\.2\.0-rc\.2/)
+  assert.match(await readFile(new URL('../README.md', import.meta.url), 'utf8'), /0\.2\.1-rc\.5/)
 })
 
 test('library icon maps to the real rc.2 primitives export', async () => {
